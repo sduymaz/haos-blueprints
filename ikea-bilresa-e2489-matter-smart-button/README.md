@@ -58,6 +58,7 @@ Contributions are welcome! If you have any suggestions, improvements, or bug fix
 This blueprint was created by [censay](https://github.com/censay).
 
 ## Changelog
+- **Version v1.1.0**: Added support for long press actions on press (long_press)
  - **Version 1.0.3**: Added [not_from/not_to](https://community.home-assistant.io/t/ikea-bilresa-matter-button-blueprint-for-ikea-matter-over-thread-button-actions-scripts-and-entities/962344/12) filters to prevent re-triggering on HA/Matter restarts ()
 - **Version 1.0.2**: Initial release
 
@@ -65,13 +66,14 @@ This blueprint was created by [censay](https://github.com/censay).
 ```
 # ===================================================================
 # IKEA BILRESA E2489 Dual Button
-# Blueprint Template v1.0.3
+# Blueprint Template v1.1.0
 #
 # Internal Versioning:
-#   schema_version: 1.0.3
-#   last_updated: 2025-12-27
+#   schema_version: 1.1.0
+#   last_updated: 2026-02-27
 #
 # Changelog:
+#   v1.1.0: Added support for long press actions on press (long_press)
 #   v1.0.3: Added not_from/not_to filters to prevent re-triggering on HA/Matter restarts (https://community.home-assistant.io/t/ikea-bilresa-matter-button-blueprint-for-ikea-matter-over-thread-button-actions-scripts-and-entities/962344/12)
 #   v1.0.2: Initial release
 #
@@ -86,7 +88,7 @@ blueprint:
   author: censay
   description: >
     Full-featured automation for the IKEA BILRESA E2489 Matter dual-button
-    remote. Supports single press, double press, and long press (on release)
+    remote. Supports single press, double press, and long press (on press and on release)
     for both buttons. Uses event entities exposed by Home Assistant for
     Matter devices. Single-press actions are prioritized for reliability.
   domain: automation
@@ -140,6 +142,13 @@ blueprint:
       selector:
         action: {}
 
+    button1_long_press:
+      name: Button 1 – Long Press (on press)
+      description: Action for Button 1 long press start (long_press).
+      default: []
+      selector:
+        action: {}
+
     button1_long:
       name: Button 1 – Long Press (on release)
       description: Action for Button 1 long press completion (long_release).
@@ -161,6 +170,13 @@ blueprint:
     button2_double:
       name: Button 2 – Double Press
       description: Action for Button 2 double press (multi_press_2).
+      default: []
+      selector:
+        action: {}
+
+    button2_long_press:
+      name: Button 2 – Long Press (on press)
+      description: Action for Button 2 long press start (long_press).
       default: []
       selector:
         action: {}
@@ -219,6 +235,12 @@ action:
         sequence: !input button1_double
 
       - conditions:
+        - condition: template
+          value_template: >
+            {{ trigger_id == 'button1' and press_type == 'long_press' }}
+        sequence: !input button1_long_press
+
+      - conditions:
           - condition: template
             value_template: >
               {{ trigger_id == 'button1' and press_type == 'long_release' }}
@@ -239,6 +261,12 @@ action:
             value_template: >
               {{ trigger_id == 'button2' and press_type == 'multi_press_2' }}
         sequence: !input button2_double
+
+      - conditions:
+        - condition: template
+          value_template: >
+            {{ trigger_id == 'button2' and press_type == 'long_press' }}
+        sequence: !input button2_long_press
 
       - conditions:
           - condition: template
