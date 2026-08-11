@@ -1,16 +1,13 @@
 blueprint:
-  name: "IKEA RODRET E2201 Zigbee Smart Button - 2 Lights"
-  description: "IKEA RODRET E2201 ile iki farklı ışığı kontrol eder."
+  name: IKEA RODRET E2201 - Çift Bağımsız Işık / Röle Kontrolü
+  description: >-
+    IKEA RODRET E2201 kumandanın Açma (I) ve Kapatma (O) tuşlarını iki farklı
+    ışık veya Sonoff ZBMINIL2 röle için bağımsız toggle (aç/kapa) anahtarı olarak çalıştırır.
   domain: automation
-  author: censay
-  homeassistant:
-    min_version: 2024.1.0
-
   input:
-    remote_devices:
-      name: Remote
-      description: IKEA RODRET E2201
-      default: []
+    remote_device:
+      name: IKEA RODRET Kumanda
+      description: Kontrol sağlayacak RODRET cihazını seçin (ZHA veya Z2M).
       selector:
         device:
           filter:
@@ -18,84 +15,74 @@ blueprint:
               manufacturer: IKEA of Sweden
             - integration: mqtt
               manufacturer: IKEA
-          multiple: true
-
-    light_on:
-      name: Light 1
-      description: Açma tuşunun kontrol edeceği ışık
-      selector:
-        entity:
-          filter:
-            - domain: light
           multiple: false
 
-    light_off:
-      name: Light 2
-      description: Kapatma tuşunun kontrol edeceği ışık
+    light_1:
+      name: 1. Işık / Röle (Üst Tuş - I)
+      description: Üst tuşa basıldığında durumu tersine çevrilecek (toggle) cihaz.
       selector:
-        entity:
-          filter:
+        target:
+          entity:
             - domain: light
-          multiple: false
+            - domain: switch
+
+    light_2:
+      name: 2. Işık / Röle (Alt Tuş - O)
+      description: Alt tuşa basıldığında durumu tersine çevrilecek (toggle) cihaz.
+      selector:
+        target:
+          entity:
+            - domain: light
+            - domain: switch
 
 mode: restart
 max_exceeded: silent
 
 trigger:
-  - trigger: event
+  # Zigbee2MQTT Tetikleyicileri
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: "on"
+    id: button_up
+
+  - platform: device
+    domain: mqtt
+    device_id: !input remote_device
+    type: action
+    subtype: "off"
+    id: button_down
+
+  # ZHA Tetikleyicileri
+  - platform: event
     event_type: zha_event
     event_data:
+      device_id: !input remote_device
       command: "on"
-      cluster_id: 6
       endpoint_id: 1
-    id: tap-on-zha
+    id: button_up
 
-  - trigger: mqtt
-    topic: "+/+/action"
-    payload: "on"
-    id: tap-on-z2m
-
-  - trigger: event
+  - platform: event
     event_type: zha_event
     event_data:
+      device_id: !input remote_device
       command: "off"
-      cluster_id: 6
       endpoint_id: 1
-    id: tap-off-zha
-
-  - trigger: mqtt
-    topic: "+/+/action"
-    payload: "off"
-    id: tap-off-z2m
-
-variables:
-  is_mqtt: "{{ trigger.platform == 'mqtt' }}"
-  is_zha: "{{ trigger.platform == 'event' and trigger.event.event_type == 'zha_event' }}"
-  remote_devices: !input remote_devices
-  remote_devices_names: "{{ remote_devices | map('device_attr', 'name') | list }}"
-
-condition:
-  - condition: template
-    value_template: "{{ (is_zha and trigger.event.data.device_id in remote_devices) or (is_mqtt and trigger.topic.split('/')[1] in remote_devices_names) }}"
+    id: button_down
 
 action:
   - choose:
       - conditions:
           - condition: trigger
-            id:
-              - tap-on-zha
-              - tap-on-z2m
+            id: button_up
         sequence:
-          - action: light.toggle
-            target:
-              entity_id: !input light_on
+          - action: homeassistant.toggle
+            target: !input light_1
 
       - conditions:
           - condition: trigger
-            id:
-              - tap-off-zha
-              - tap-off-z2m
+            id: button_down
         sequence:
-          - action: light.toggle
-            target:
-              entity_id: !input light_off
+          - action: homeassistant.toggle
+            target: !input light_2
