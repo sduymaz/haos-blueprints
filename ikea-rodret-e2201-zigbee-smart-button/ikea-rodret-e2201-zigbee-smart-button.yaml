@@ -5,7 +5,6 @@ blueprint:
   author: censay
   homeassistant:
     min_version: 2025.12.1
-
   input:
     remote_devices:
       name: Remote
@@ -69,14 +68,17 @@ triggers:
     id: tap-off-z2m
 
 variables:
-  is_mqtt: "{{ trigger.platform == 'mqtt' }}"
   is_zha: "{{ trigger.platform == 'event' }}"
+  is_mqtt: "{{ trigger.platform == 'mqtt' }}"
   remote_devices: !input remote_devices
   remote_devices_names: "{{ remote_devices | map('device_attr', 'name') | list }}"
 
 conditions:
   - condition: template
-    value_template: "{{ (is_zha and trigger.event.data.device_id in remote_devices) or (is_mqtt and trigger.topic.split('/')[1] in remote_devices_names) }}"
+    value_template: >
+      {{ (is_zha and trigger.event.data.device_id in remote_devices)
+         or
+         (is_mqtt and trigger.topic.split('/')[1] in remote_devices_names) }}
 
 actions:
   - choose:
