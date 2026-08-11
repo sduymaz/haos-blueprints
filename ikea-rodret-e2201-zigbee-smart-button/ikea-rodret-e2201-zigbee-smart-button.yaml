@@ -1,148 +1,130 @@
 homeassistant:
-min_version: 2025.12.1
-author: censay
-domain: automation
-name: "💡 IKEA RODRET E2201 Zigbee Smart Button - 2 Lights"
-description: | IKEA RODRET E2201 ile iki farklı ışığı kontrol eder.
+  min_version: 2025.12.1
+  author: censay
+  domain: automation
+  name: "IKEA RODRET E2201 Zigbee Smart Button - 2 Lights"
+  description: |
+    IKEA RODRET E2201 ile iki farklı ışığı kontrol eder.
+    Tap On → 1. ışığı toggle eder.
+    Tap Off → 2. ışığı toggle eder.
 
-📌 Expected Behavior:
-- Tap On ➕ → 1. ışığı toggle eder.
-- Tap Off ➖ → 2. ışığı toggle eder.
-- Hold → hiçbir işlem yapmaz.
+  input:
+    remote_devices:
+      name: Remote
+      description: IKEA RODRET E2201
+      default: []
+      selector:
+        device:
+          filter:
+            - integration: zha
+              manufacturer: IKEA of Sweden
+            - integration: mqtt
+              manufacturer: IKEA
+          multiple: true
 
-input:
-remote_devices:
-name: Remote
-description: IKEA RODRET E2201
-default: []
-selector:
-device:
-filter:
-- integration: zha
-manufacturer: IKEA of Sweden
-- integration: mqtt
-manufacturer: IKEA
-multiple: true
+    light_on:
+      name: Light 1
+      description: Açma tuşunun kontrol edeceği ışık
+      selector:
+        entity:
+          filter:
+            - domain: light
+          multiple: false
 
-light_on:
-  name: Light 1
-  description: Açma tuşunun kontrol edeceği ışık
-  selector:
-    entity:
-      filter:
-        - domain: light
-      multiple: false
+    light_off:
+      name: Light 2
+      description: Kapatma tuşunun kontrol edeceği ışık
+      selector:
+        entity:
+          filter:
+            - domain: light
+          multiple: false
 
-light_off:
-  name: Light 2
-  description: Kapatma tuşunun kontrol edeceği ışık
-  selector:
-    entity:
-      filter:
-        - domain: light
-      multiple: false
+  mode: restart
+  max_exceeded: silent
 
-mode: restart
-max_exceeded: silent
+  triggers:
+    - trigger: event
+      event_type: zha_event
+      event_data:
+        command: "on"
+        cluster_id: 6
+        endpoint_id: 1
+      id: tap-on-zha
 
-triggers:
+    - trigger: mqtt
+      topic: "+/+/action"
+      payload: "on"
+      id: tap-on-z2m
 
-# TAP ON
-- trigger: event
-  event_type: zha_event
-  event_data:
-    command: "on"
-    cluster_id: 6
-    endpoint_id: 1
-  id: tap-on-zha
+    - trigger: event
+      event_type: zha_event
+      event_data:
+        command: "off"
+        cluster_id: 6
+        endpoint_id: 1
+      id: tap-off-zha
 
-- trigger: mqtt
-  topic: "+/+/action"
-  payload: "on"
-  id: tap-on-z2m
+    - trigger: mqtt
+      topic: "+/+/action"
+      payload: "off"
+      id: tap-off-z2m
 
-# TAP OFF
-- trigger: event
-  event_type: zha_event
-  event_data:
-    command: "off"
-    cluster_id: 6
-    endpoint_id: 1
-  id: tap-off-zha
+  variables:
+    is_mqtt: '{{ trigger.platform == "mqtt" }}'
+    is_zha: '{{ trigger.platform == "event" and trigger.event.event_type == "zha_event" }}'
+    remote_devices: !input remote_devices
+    remote_devices_names: >
+      {{ remote_devices | map("device_attr", "name") | list }}
 
-- trigger: mqtt
-  topic: "+/+/action"
-  payload: "off"
-  id: tap-off-z2m
+  condition:
+    - condition: template
+      value_template: >
+        {% set selected_match =
+          (trigger.event.data.device_id in remote_devices if is_zha)
+          or
+          (trigger.platform == "mqtt"
+           and trigger.topic.split('/')[1] in remote_devices_names)
+        %}
 
-variables:
-is_mqtt: '{{ trigger.platform == "mqtt" }}'
-is_zha: '{{ trigger.platform == "event" and trigger.event.event_type == "zha_event" }}'
-
-remote_devices: !input remote_devices
-
-remote_devices_names: >
-  {{ remote_devices | map("device_attr", "name") | list }}
-
-condition:
-- condition: template
-  value_template: >
-    {% set selected_match =
-      (trigger.event.data.device_id in remote_devices if is_zha)
-      or
-      (trigger.platform == "mqtt"
-       and trigger.topic.split('/')[1] in remote_devices_names)
-    %}
-
-    {% set ikea_styrbar_match =
-      is_zha
-      and
-      (device_attr(
-        trigger.event.data.device_id,
-        'manufacturer'
-      ) | default('', true) | lower == 'ikea of sweden')
-      and
-      ('styrbar' in
-        (
-          device_attr(
+        {% set ikea_styrbar_match =
+          is_zha
+          and
+          (device_attr(
             trigger.event.data.device_id,
-            'model'
-          ) | default('', true) | lower
-        )
-      )
-    %}
+            'manufacturer'
+          ) | default('', true) | lower == 'ikea of sweden')
+          and
+          ('styrbar' in
+            (
+              device_attr(
+                trigger.event.data.device_id,
+                'model'
+              ) | default('', true) | lower
+            )
+          )
+        %}
 
-    {{ selected_match or ikea_styrbar_match }}
+        {{ selected_match or ikea_styrbar_match }}
 
-actions:
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id:
+                - tap-on-zha
+                - tap-on-z2m
+          sequence:
+            - service: light.toggle
+              target:
+                entity_id: !input light_on
 
-- choose:
-
-    # ==========================================
-    # AÇMA TUŞU → LIGHT 1 TOGGLE
-    # ==========================================
-    - conditions:
-        - condition: trigger
-          id:
-            - tap-on-zha
-            - tap-on-z2m
-
-      sequence:
-        - service: light.toggle
-          target:
-            entity_id: !input light_on
-
-
-    # ==========================================
-    # KAPATMA TUŞU → LIGHT 2 TOGGLE
-    # ==========================================
-    - conditions:
-        - condition: trigger
-          id:
-            - tap-off-zha
-            - tap-off-z2m
-
-      sequence:
-        - service: light.toggle
-          target:
-            entity_id: !input light_off
+        - conditions:
+            - condition: trigger
+              id:
+                - tap-off-zha
+                - tap-off-z2m
+          sequence:
+            - service: light.toggle
+              target:
+                entity_id: !input light_off
